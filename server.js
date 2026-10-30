@@ -1,7 +1,12 @@
 const express = require('express');
 const { exec } = require('child_process');
+const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Render ortamında mıyız yoksa lokalde mi? Ona göre yt-dlp yolu seçiyoruz
+const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER;
+const ytDlpPath = isProduction ? path.join(__dirname, 'bin', 'yt-dlp') : 'yt-dlp';
 
 // ⚡ Şarkı Linkleri İçin Bellek Önbelleği (Cache Map)
 const streamCache = new Map();
@@ -17,7 +22,7 @@ app.get('/stream/:id', (req, res) => {
     }
 
     console.log(`🔍 Çözümleniyor: ${videoId}`);
-    const command = `yt-dlp -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
+    const command = `${ytDlpPath} -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
@@ -43,7 +48,7 @@ app.get('/radio/:id', (req, res) => {
     const videoId = req.params.id;
     console.log(`📻 Benzer Radyo Şarkıları İsteniyor: ${videoId}`);
 
-    const command = `yt-dlp --flat-playlist --print "%(id)s||%(title)s||%(uploader)s" "https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}"`;
+    const command = `${ytDlpPath} --flat-playlist --print "%(id)s||%(title)s||%(uploader)s" "https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
