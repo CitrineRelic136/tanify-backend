@@ -15,13 +15,14 @@ const cookieArg = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
 const streamCache = new Map();
 
-// 1. Ses URL Çözücü (Çerez & JS Destekli)
+// 1. Ses URL Çözücü ve Doğrudan Yönlendirme (Proxy/Redirect)
 app.get('/stream/:id', (req, res) => {
     const videoId = req.params.id;
 
+    // Önbellekte varsa direkt yönlendir
     if (streamCache.has(videoId)) {
-        console.log(`⚡ Önbellekten Anında Verildi: ${videoId}`);
-        return res.json({ url: streamCache.get(videoId) });
+        console.log(`⚡ Önbellekten Yönlendiriliyor: ${videoId}`);
+        return res.redirect(streamCache.get(videoId));
     }
 
     console.log(`🔍 Çözümleniyor: ${videoId}`);
@@ -35,9 +36,11 @@ app.get('/stream/:id', (req, res) => {
 
         const streamUrl = stdout.trim().split('\n')[0];
         if (streamUrl && streamUrl.startsWith('http')) {
+            // Yeni adresi önbelleğe al
             streamCache.set(videoId, streamUrl);
-            console.log(`✅ Başarılı URL Alındı ve Önbelleklendi!`);
-            res.json({ url: streamUrl });
+            console.log(`✅ Başarılı URL Alındı, Yönlendiriliyor!`);
+            // JSON dönmek yerine direkt akış adresine yönlendiriyoruz ki ExoPlayer kopmasın
+            return res.redirect(streamUrl);
         } else {
             console.log(`❌ Geçersiz URL çıktı:`, stdout);
             res.status(500).json({ error: 'Geçerli link alınamadı' });
