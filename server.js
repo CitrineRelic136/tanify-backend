@@ -15,7 +15,7 @@ const cookieArg = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
 const streamCache = new Map();
 
-// 1. Ses URL Çözücü (Çerez Destekli)
+// 1. Ses URL Çözücü (Çerez & JS Destekli)
 app.get('/stream/:id', (req, res) => {
     const videoId = req.params.id;
 
@@ -25,7 +25,7 @@ app.get('/stream/:id', (req, res) => {
     }
 
     console.log(`🔍 Çözümleniyor: ${videoId}`);
-    const command = `${ytDlpPath} ${cookieArg} -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
+    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
@@ -50,7 +50,7 @@ app.get('/radio/:id', (req, res) => {
     const videoId = req.params.id;
     console.log(`📻 Benzer Radyo Şarkıları İsteniyor: ${videoId}`);
 
-    const command = `${ytDlpPath} ${cookieArg} --flat-playlist --print "%(id)s||%(title)s||%(uploader)s" "https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}"`;
+    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node --flat-playlist --print "%(id)s||%(title)s||%(uploader)s" "https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
