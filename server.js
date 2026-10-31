@@ -8,68 +8,103 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Sağlık kontrolü endpoint'i
+// Sağlık kontrolü (Ping)
 app.get('/', (req, res) => {
-    res.json({ status: 'online', message: 'Tanify yt-dlp backend çalışıyor.' });
+    res.json({ status: 'online', message: 'Tanify yt-dlp backend aktif.' });
 });
 
-// İndirme / Akış (Stream) endpoint'i
-app.get('/download', (req, res) => {
-    const videoUrl = req.query.url;
-    const format = req.query.format || 'mp3'; // 'mp3' veya 'mp4'
-
-    if (!videoUrl) {
-        return res.status(400).json({ error: 'URL parametresi gerekli.' });
+// 1. Akış URL'si Çözümleme (Android uygulamasının beklediği /stream/:id endpoint'i)
+app.get('/stream/:id', (req, res) => {
+    const videoId = req.params.id;
+    if (!videoId) {
+        return res.status(400).json({ error: 'Video ID gerekli.' });
     }
 
-    // yt-dlp argümanları
-    let ytdlArgs = [];
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    
+    // yt-dlp -g komutu ile doğrudan en iyi ses akış linkini alıyoruz
+    const ytdlp = spawn('yt-dlp', ['-g', '-f', 'bestaudio/best', videoUrl]);
 
-    if (format === 'mp3') {
-        ytdlArgs = [
-            '-x', // Sadece ses
-            '--audio-format', 'mp3',
-            '--audio-quality', '0',
-            '-o', '-', // Çıktıyı standart çıktıya (stdout) yönlendir
-            videoUrl
-        ];
-        res.setHeader('Content-Type', 'audio/mpeg');
-        res.setHeader('Content-Disposition', 'attachment; filename="audio.mp3"');
-    } else {
-        ytdlArgs = [
-            '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-            '-o', '-',
-            videoUrl
-        ];
-        res.setHeader('Content-Type', 'video/mp4');
-        res.setHeader('Content-Disposition', 'attachment; filename="video.mp4"');
-    }
-
-    // yt-dlp işlemini başlat
-    const ytdlpProcess = spawn('yt-dlp', ytdlArgs);
-
-    // Veriyi istemciye (client) akıt
-    ytdlpProcess.stdout.pipe(res);
-
-    // Hata yönetimi
+    let output = '';
     let errorOutput = '';
-    ytdlpProcess.stderr.on('data', (data) => {
+
+    ytdlp.stdout.on('data', (data) => {
+        output += data.toString();
+    });
+
+    ytdlp.stderr.on('data', (data) => {
         errorOutput += data.toString();
     });
 
-    ytdlpProcess.on('close', (code) => {
-        if (code !== 0 && !res.headersSent) {
+    ytdlp.on('close', (code) => {
+        if (code !== 0) {
             console.error(`yt-dlp hata kodu ${code}:`, errorOutput);
-            res.status(500).json({ error: 'Medya işlenirken bir hata oluştu.', details: errorOutput });
+            return res.status(500).json({ error: 'Akış URL\'si alınamadı', details: errorOutput });
         }
+
+        const streamUrl = output.trim().split('\n')[0];
+
+        if (!streamUrl) {
+            return res.status(404).json({ error: 'Geçerli akış linki bulunamadı.' });
+        }
+
+        // Android tarafındaki JSONObject(responseStr).getString("url") yapısıyla birebir uyumlu
+        res.json({ url: streamUrl });
+    });
+});
+
+// 2. Benzer Şarkılar / Radyo Listesi (Android uygulamasının beklediği /radio/:id endpoint'i)
+app.get('/radio/:id', (req, res) => {
+    const videoId = req.params.id;
+    if (!videoId) {
+        return res.status(400).json({ error: 'Video ID gerekli.' });
+    }
+
+    // YouTube'un resmi otomatik Mix / Radyo çalma listesi
+    const mixPlaylistUrl = `https://www.youtube.com/playlist?list=RD${videoId}`;
+    
+    const ytdlp = spawn('yt-dlp', ['--flat-playlist', '--dump-json', '--playlist-end', '20', mixPlaylistUrl]);
+
+    let output = '';
+    let errorOutput = '';
+
+    ytdlp.stdout.on('data', (data) => {
+        output += data.toString();
     });
 
-    // İstemci bağlantıyı kestiğinde süreci sonlandır
-    req.on('close', () => {
-        ytdlpProcess.kill('SIGKILL');
+    ytdlp.stderr.on('data', (data) => {
+        errorOutput += data.toString();
+    });
+
+    ytdlp.on('close', (code) => {
+        if (code !== 0 && !output.trim()) {
+            console.error(`yt-dlp radyo hata kodu ${code}:`, errorOutput);
+            return res.status(500).json({ error: 'Radyo listesi alınamadı', details: errorOutput });
+        }
+
+        try {
+            const lines = output.trim().split('\n').filter(Boolean);
+            const songs = lines.map(line => {
+                try {
+                    const item = JSON.parse(line);
+                    const id = item.id || item.url;
+                    const title = item.title || 'Bilinmeyen Şarkı';
+                    const artist = item.uploader || item.channel || 'Bilinmeyen Sanatçı';
+                    const coverUrl = id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : '';
+                    return { id, title, artist, coverUrl };
+                } catch (e) {
+                    return null;
+                }
+            }).filter(song => song && song.id);
+
+            res.json(songs);
+        } catch (e) {
+            console.error('JSON parse hatası:', e);
+            res.status(500).json({ error: 'Radyo verisi işlenemedi.' });
+        }
     });
 });
 
 app.listen(PORT, () => {
-    console.log(`Sunucu ${PORT} portunda ayakta.`);
+    console.log(`Sunucu ${PORT} portunda çalışıyor.`);
 });
