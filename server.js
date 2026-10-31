@@ -15,7 +15,7 @@ const cookieArg = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
 const streamCache = new Map();
 
-// 1. Ses URL Çözücü (JSON Yanıt Döndüren Sağlam Versiyon)
+// 1. Ses URL Çözücü (Hızlandırılmış Versiyon)
 app.get('/stream/:id', (req, res) => {
     const videoId = req.params.id;
 
@@ -25,7 +25,8 @@ app.get('/stream/:id', (req, res) => {
     }
 
     console.log(`🔍 Çözümleniyor: ${videoId}`);
-    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
+    // Hızlandırıcı bayraklar (--no-warnings, --no-playlist) eklendi
+    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node --no-warnings --no-playlist -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
