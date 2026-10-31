@@ -27,8 +27,8 @@ app.get('/stream/:id', (req, res) => {
     }
 
     console.log(`🔍 Çözümleniyor ve Proxy Hazırlanıyor: ${videoId}`);
-    // -f bestaudio kaldırıldı, format hatasını önlemek için saf ve kararlı komut bırakıldı
-    const command = `${ytDlpPath} ${cookieArg} --no-warnings --no-playlist --no-check-certificates -g "https://www.youtube.com/watch?v=${videoId}"`;
+    // Esnek format seçici ile format uyuşmazlığı hatası kökten engellendi
+    const command = `${ytDlpPath} ${cookieArg} --no-warnings --no-playlist --no-check-certificates -g -f "bv*+ba/b / b" "https://www.youtube.com/watch?v=${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
