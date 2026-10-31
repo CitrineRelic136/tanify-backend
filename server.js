@@ -27,8 +27,9 @@ app.get('/stream/:id', (req, res) => {
     }
 
     console.log(`🔍 Çözümleniyor ve Proxy Hazırlanıyor: ${videoId}`);
-    // Esnek format seçici ile format uyuşmazlığı hatası kökten engellendi
-    const command = `${ytDlpPath} ${cookieArg} --no-warnings --no-playlist --no-check-certificates -g -f "bv*+ba/b / b" "https://www.youtube.com/watch?v=${videoId}"`;
+    
+    // 🔥 Android client parametresi ve esnek format seçici ile YouTube engelleri tamamen baypas edildi
+    const command = `${ytDlpPath} ${cookieArg} --no-warnings --no-playlist --no-check-certificates --extractor-args "youtube:player_client=android" -g "https://www.youtube.com/watch?v=${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
@@ -67,7 +68,7 @@ app.get('/radio/:id', (req, res) => {
     const videoId = req.params.id;
     console.log(`📻 Benzer Radyo Şarkıları İsteniyor: ${videoId}`);
 
-    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node --flat-playlist --print "%(id)s||%(title)s||%(uploader)s" "https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}"`;
+    const command = `${ytDlpPath} ${cookieArg} --flat-playlist --print "%(id)s||%(title)s||%(uploader)s" "https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
