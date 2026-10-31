@@ -26,14 +26,14 @@ app.get('/stream/:id', async (req, res) => {
     });
 
     const options = {
-        hostname: 'api.cobalt.tools',
+        hostname: 'cobalt.kwiatekmilosz.pl', // veya alternatif açık bir instance
         port: 443,
         path: '/',
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'User-Agent': 'TanifyApp/1.0'
+            'User-Agent': 'Mozilla/5.0'
         }
     };
 
