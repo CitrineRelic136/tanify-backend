@@ -31,14 +31,18 @@ app.get('/stream/:id', (req, res) => {
 
     const args = [];
     const cookiesPath = path.join(__dirname, 'cookies.txt');
-    
-    // Eğer cookies.txt varsa sadece onu ekliyoruz (Android client parametresini sildik)
     if (fs.existsSync(cookiesPath)) {
         args.push('--cookies', cookiesPath);
     }
 
-    // Doğrudan cookies ile en iyi sesi alacak şekilde yapılandırıyoruz
-    args.push('-g', '-f', 'bestaudio/best', videoUrl);
+    // KISIR DÖNGÜYÜ KIRAN NOKTA: 
+    // player_client=tvembedded veya ios kullanarak web imza/JS challenge engellerini tamamen bypass ediyoruz.
+    args.push(
+        '--extractor-args', 'youtube:player_client=tvembedded',
+        '-g',
+        '-f', 'ba[ext=m4a]/bestaudio/best',
+        videoUrl
+    );
 
     const ytdlp = spawn('yt-dlp', args);
 
