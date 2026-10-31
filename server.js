@@ -1,6 +1,10 @@
 const express = require('express');
 const { spawn } = require('child_process');
 const cors = require('cors');
+const path = require('path');
+
+// Proje içindeki yerel bin klasörünü PATH'e ekle (Render uyumu için)
+process.env.PATH = `${path.join(__dirname, 'bin')}:${process.env.PATH}`;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -8,12 +12,12 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Sağlık kontrolü (Ping)
+// Sağlık kontrolü
 app.get('/', (req, res) => {
     res.json({ status: 'online', message: 'Tanify yt-dlp backend aktif.' });
 });
 
-// 1. Akış URL'si Çözümleme (Android uygulamasının beklediği /stream/:id endpoint'i)
+// 1. Akış URL'si Çözümleme
 app.get('/stream/:id', (req, res) => {
     const videoId = req.params.id;
     if (!videoId) {
@@ -21,8 +25,9 @@ app.get('/stream/:id', (req, res) => {
     }
 
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    
-    // yt-dlp -g komutu ile doğrudan en iyi ses akış linkini alıyoruz
+    console.log(`İstek alındı, işleniyor: ${videoUrl}`);
+
+    // yt-dlp -g komutu
     const ytdlp = spawn('yt-dlp', ['-g', '-f', 'bestaudio/best', videoUrl]);
 
     let output = '';
@@ -36,10 +41,19 @@ app.get('/stream/:id', (req, res) => {
         errorOutput += data.toString();
     });
 
+    ytdlp.on('error', (err) => {
+        console.error('yt-dlp başlatılamadı (Yüklü mü?):', err);
+        return res.status(500).json({ error: 'yt-dlp sunucuda çalıştırılamadı', details: err.message });
+    });
+
     ytdlp.on('close', (code) => {
         if (code !== 0) {
             console.error(`yt-dlp hata kodu ${code}:`, errorOutput);
-            return res.status(500).json({ error: 'Akış URL\'si alınamadı', details: errorOutput });
+            return res.status(500).json({ 
+                error: 'Akış URL\'si alınamadı', 
+                code: code, 
+                details: errorOutput.trim() || 'Bilinmeyen yt-dlp hatası' 
+            });
         }
 
         const streamUrl = output.trim().split('\n')[0];
@@ -48,22 +62,19 @@ app.get('/stream/:id', (req, res) => {
             return res.status(404).json({ error: 'Geçerli akış linki bulunamadı.' });
         }
 
-        // Android tarafındaki JSONObject(responseStr).getString("url") yapısıyla birebir uyumlu
         res.json({ url: streamUrl });
     });
 });
 
-// 2. Benzer Şarkılar / Radyo Listesi (Android uygulamasının beklediği /radio/:id endpoint'i)
+// 2. Radyo / Benzer Şarkılar Listesi
 app.get('/radio/:id', (req, res) => {
     const videoId = req.params.id;
     if (!videoId) {
         return res.status(400).json({ error: 'Video ID gerekli.' });
     }
 
-    // YouTube'un resmi otomatik Mix / Radyo çalma listesi
     const mixPlaylistUrl = `https://www.youtube.com/playlist?list=RD${videoId}`;
-    
-    const ytdlp = spawn('yt-dlp', ['--flat-playlist', '--dump-json', '--playlist-end', '20', mixPlaylistUrl]);
+    const ytdlp = spawn('yt-dlp', ['--flat-playlist', '--dump-json', '--playlist-end', '15', mixPlaylistUrl]);
 
     let output = '';
     let errorOutput = '';
@@ -76,10 +87,15 @@ app.get('/radio/:id', (req, res) => {
         errorOutput += data.toString();
     });
 
+    ytdlp.on('error', (err) => {
+        console.error('yt-dlp radyo hatası:', err);
+        return res.status(500).json({ error: 'yt-dlp çalıştırılamadı' });
+    });
+
     ytdlp.on('close', (code) => {
         if (code !== 0 && !output.trim()) {
             console.error(`yt-dlp radyo hata kodu ${code}:`, errorOutput);
-            return res.status(500).json({ error: 'Radyo listesi alınamadı', details: errorOutput });
+            return res.status(500).json({ error: 'Radyo listesi alınamadı', details: errorOutput.trim() });
         }
 
         try {
