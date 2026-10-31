@@ -1,106 +1,75 @@
 const express = require('express');
-const https = require('https');
-const http = require('http');
+const { spawn } = require('child_process');
+const cors = require('cors');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const streamCache = new Map();
+app.use(cors());
+app.use(express.json());
 
-// Cobalt API Üzerinden Doğrudan Akış Çözücü
-app.get('/stream/:id', async (req, res) => {
-    const videoId = req.params.id;
-    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-
-    if (streamCache.has(videoId)) {
-        console.log(`⚡ Önbellekten Akış Sunuluyor: ${videoId}`);
-        return proxyAudio(streamCache.get(videoId), res);
-    }
-
-    console.log(`🔍 Cobalt API ile Çözümleniyor: ${videoId}`);
-
-    const postData = JSON.stringify({
-        url: youtubeUrl,
-        downloadMode: 'audio',
-        audioFormat: 'mp3'
-    });
-
-    const options = {
-        hostname: 'api.us.cobalt.io', // veya alternatif açık bir instance
-        port: 443,
-        path: '/',
-        method: 'POST',
-        headers: {
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-}
-    };
-
-    const apiReq = https.request(options, (apiRes) => {
-        let data = '';
-
-        apiRes.on('data', (chunk) => {
-            data += chunk;
-        });
-
-        apiRes.on('end', () => {
-            try {
-                const json = JSON.parse(data);
-                const streamUrl = json.url || json.picker?.[0]?.url;
-
-                if (streamUrl && streamUrl.startsWith('http')) {
-                    console.log(`✅ Cobalt üzerinden akış linki alındı!`);
-                    streamCache.set(videoId, streamUrl);
-                    return proxyAudio(streamUrl, res);
-                } else {
-                    console.error(`❌ Cobalt link döndüremedi:`, data);
-                    return res.status(500).json({ error: 'Geçerli akış linki alınamadı', details: data });
-                }
-            } catch (e) {
-                console.error(`❌ JSON Parse Hatası: ${e.message}`);
-                return res.status(500).json({ error: 'Sunucu yanıtı işlenemedi' });
-            }
-        });
-    });
-
-    apiReq.on('error', (err) => {
-        console.error(`❌ Cobalt İstek Hatası: ${err.message}`);
-        res.status(500).json({ error: err.message });
-    });
-
-    apiReq.write(postData);
-    apiReq.end();
+// Sağlık kontrolü endpoint'i
+app.get('/', (req, res) => {
+    res.json({ status: 'online', message: 'Tanify yt-dlp backend çalışıyor.' });
 });
 
-function proxyAudio(targetUrl, clientRes) {
-    const client = targetUrl.startsWith('https') ? https : http;
-    
-    client.get(targetUrl, (ytRes) => {
-        // Eğer harici kaynak yönlendirme (redirect) verirse takip et
-        if (ytRes.statusCode >= 300 && ytRes.statusCode < 400 && ytRes.headers.location) {
-            return proxyAudio(ytRes.headers.location, clientRes);
-        }
+// İndirme / Akış (Stream) endpoint'i
+app.get('/download', (req, res) => {
+    const videoUrl = req.query.url;
+    const format = req.query.format || 'mp3'; // 'mp3' veya 'mp4'
 
-        clientRes.writeHead(ytRes.statusCode, {
-            'Content-Type': ytRes.headers['content-type'] || 'audio/mpeg',
-            'Transfer-Encoding': 'chunked'
-        });
-        ytRes.pipe(clientRes);
-    }).on('error', (err) => {
-        console.error(`❌ Proxy Akış Hatası: ${err.message}`);
-        if (!clientRes.headersSent) {
-            clientRes.status(500).json({ error: 'Akış aktarılamadı' });
+    if (!videoUrl) {
+        return res.status(400).json({ error: 'URL parametresi gerekli.' });
+    }
+
+    // yt-dlp argümanları
+    let ytdlArgs = [];
+
+    if (format === 'mp3') {
+        ytdlArgs = [
+            '-x', // Sadece ses
+            '--audio-format', 'mp3',
+            '--audio-quality', '0',
+            '-o', '-', // Çıktıyı standart çıktıya (stdout) yönlendir
+            videoUrl
+        ];
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Content-Disposition', 'attachment; filename="audio.mp3"');
+    } else {
+        ytdlArgs = [
+            '-f', 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            '-o', '-',
+            videoUrl
+        ];
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Content-Disposition', 'attachment; filename="video.mp4"');
+    }
+
+    // yt-dlp işlemini başlat
+    const ytdlpProcess = spawn('yt-dlp', ytdlArgs);
+
+    // Veriyi istemciye (client) akıt
+    ytdlpProcess.stdout.pipe(res);
+
+    // Hata yönetimi
+    let errorOutput = '';
+    ytdlpProcess.stderr.on('data', (data) => {
+        errorOutput += data.toString();
+    });
+
+    ytdlpProcess.on('close', (code) => {
+        if (code !== 0 && !res.headersSent) {
+            console.error(`yt-dlp hata kodu ${code}:`, errorOutput);
+            res.status(500).json({ error: 'Medya işlenirken bir hata oluştu.', details: errorOutput });
         }
     });
-}
 
-// Radyo endpoint'i (Alternatif arama tabanlı radyo desteği)
-app.get('/radio/:id', (req, res) => {
-    // Şarkı geçişlerinde sorunsuz çalışması için boş dizi veya yedek liste döndürür
-    res.json([]);
+    // İstemci bağlantıyı kestiğinde süreci sonlandır
+    req.on('close', () => {
+        ytdlpProcess.kill('SIGKILL');
+    });
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Tanify Cobalt Proxy Sunucusu ${PORT} portunda aktif!`);
+    console.log(`Sunucu ${PORT} portunda ayakta.`);
 });
