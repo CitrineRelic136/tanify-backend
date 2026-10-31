@@ -1,9 +1,13 @@
 {
-  "name": "tanify-server",
+  "name": "tanify-backend",
   "version": "1.0.0",
+  "description": "Tanify yt-dlp backend",
   "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
-    "express": "latest",
-    "yt-dlp-exec": "latest"
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
   }
 }
