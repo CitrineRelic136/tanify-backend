@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 3000;
-
+const https = https = require('https'); // Dosyanın en başına ekle (yoksa)
 const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER;
 const ytDlpPath = isProduction ? path.join(__dirname, 'bin', 'yt-dlp') : 'yt-dlp';
 const cookiesPath = path.join(__dirname, 'cookies.txt');
@@ -15,7 +15,7 @@ const cookieArg = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
 const streamCache = new Map();
 
-const https = https = require('https'); // Dosyanın en başına ekle (yoksa)
+
 
 // 1. Ses Akışını Sunucu Üzerinden Proxy'leme (Kesin Çözüm)
 app.get('/stream/:id', (req, res) => {
