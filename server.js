@@ -19,6 +19,7 @@ app.get('/', (req, res) => {
 });
 
 // 1. Akış URL'si Çözümleme
+// 1. Akış URL'si Çözümleme
 app.get('/stream/:id', (req, res) => {
     const videoId = req.params.id;
     if (!videoId) {
@@ -28,16 +29,15 @@ app.get('/stream/:id', (req, res) => {
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     console.log(`İstek alındı, işleniyor: ${videoUrl}`);
 
-    // yt-dlp argümanları (cookies.txt varsa otomatik eklenir)
     const args = [];
     const cookiesPath = path.join(__dirname, 'cookies.txt');
     if (fs.existsSync(cookiesPath)) {
         args.push('--cookies', cookiesPath);
     }
 
-    args.push('-g', '-f', 'bestaudio/best', videoUrl);
+    // KRİTİK DEĞİŞİKLİK: player_client=android ekleyerek 403 ve imza hatalarını bypass ediyoruz
+    args.push('--extractor-args', 'youtube:player_client=android', '-g', '-f', 'bestaudio/best', videoUrl);
 
-    // yt-dlp komutu
     const ytdlp = spawn('yt-dlp', args);
 
     let output = '';
@@ -52,7 +52,7 @@ app.get('/stream/:id', (req, res) => {
     });
 
     ytdlp.on('error', (err) => {
-        console.error('yt-dlp başlatılamadı (Yüklü mü?):', err);
+        console.error('yt-dlp başlatılamadı:', err);
         return res.status(500).json({ error: 'yt-dlp sunucuda çalıştırılamadı', details: err.message });
     });
 
