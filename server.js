@@ -26,7 +26,7 @@ app.get('/stream/:id', (req, res) => {
 
     console.log(`🔍 Çözümleniyor ve Proxy Hazırlanıyor: ${videoId}`);
     // --js-runtimes node kaldırıldı, saf ve kararlı komut bırakıldı
-    const command = `${ytDlpPath} ${cookieArg} --no-warnings --no-playlist -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
+    const command = `${ytDlpPath} ${cookieArg} --no-warnings --no-playlist --no-check-certificates -g "https://www.youtube.com/watch?v=${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
@@ -65,7 +65,7 @@ app.get('/radio/:id', (req, res) => {
     const videoId = req.params.id;
     console.log(`📻 Benzer Radyo Şarkıları İsteniyor: ${videoId}`);
 
-    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node --flat-playlist --print "%(id)s||%(title)s||%(uploader)s" "https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}"`;
+    const command = `${ytDlpPath} ${cookieArg} --no-warnings --no-playlist --no-check-certificates -g "https://www.youtube.com/watch?v=${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
