@@ -31,10 +31,10 @@ app.get('/stream/:id', async (req, res) => {
         path: '/',
         method: 'POST',
         headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'User-Agent': 'Mozilla/5.0'
-        }
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+}
     };
 
     const apiReq = https.request(options, (apiRes) => {
