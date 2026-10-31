@@ -26,7 +26,7 @@ app.get('/stream/:id', async (req, res) => {
     });
 
     const options = {
-        hostname: 'api.cobalt.tools', // veya alternatif açık bir instance
+        hostname: 'api.us.cobalt.io', // veya alternatif açık bir instance
         port: 443,
         path: '/',
         method: 'POST',
