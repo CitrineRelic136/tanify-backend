@@ -2,9 +2,11 @@ const express = require('express');
 const { exec } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
-const https = https = require('https'); // Dosyanın en başına ekle (yoksa)
+
 const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER;
 const ytDlpPath = isProduction ? path.join(__dirname, 'bin', 'yt-dlp') : 'yt-dlp';
 const cookiesPath = path.join(__dirname, 'cookies.txt');
@@ -15,39 +17,36 @@ const cookieArg = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
 const streamCache = new Map();
 
-
-
-// 1. Ses Akışını Sunucu Üzerinden Proxy'leme (Kesin Çözüm)
+// Sunucu tarafında proxy akış desteği (/server.js)
 app.get('/stream/:id', (req, res) => {
     const videoId = req.params.id;
 
     if (streamCache.has(videoId)) {
-        console.log(`⚡ Önbellekten Proxy Akışı Başlatılıyor: ${videoId}`);
+        console.log(`⚡ Önbellekten Proxy Akışı: ${videoId}`);
         return proxyAudio(streamCache.get(videoId), res);
     }
 
     console.log(`🔍 Çözümleniyor ve Proxy Hazırlanıyor: ${videoId}`);
-    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node --no-warnings --no-playlist -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
+    // -f bestaudio kaldırıldı, format hatasını önlemek için saf ve kararlı komut bırakıldı
+    const command = `${ytDlpPath} ${cookieArg} --no-warnings --no-playlist --no-check-certificates -g "https://www.youtube.com/watch?v=${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
-            console.error(`❌ yt-dlp Çalıştırma Hatası: ${error.message}`);
-            return res.status(500).json({ error: error.message });
+            console.error(`❌ yt-dlp Hatası: ${error.message}`);
+            console.error(`❌ stderr Detayı: ${stderr}`);
+            return res.status(500).json({ error: error.message, details: stderr });
         }
 
         const streamUrl = stdout.trim().split('\n')[0];
         if (streamUrl && streamUrl.startsWith('http')) {
             streamCache.set(videoId, streamUrl);
-            console.log(`✅ URL Alındı, Proxy Üzerinden Aktarılıyor!`);
             return proxyAudio(streamUrl, res);
         } else {
-            console.log(`❌ Geçersiz URL çıktı:`, stdout);
             res.status(500).json({ error: 'Geçerli link alınamadı' });
         }
     });
 });
 
-// Yardımcı Proxy Fonksiyonu (Sesi YouTube'dan alıp telefona basar)
 function proxyAudio(targetUrl, clientRes) {
     https.get(targetUrl, (ytRes) => {
         clientRes.writeHead(ytRes.statusCode, {
@@ -62,7 +61,6 @@ function proxyAudio(targetUrl, clientRes) {
         }
     });
 }
-
 
 // 2. Benzer Radyo Şarkıları Endpoint'i
 app.get('/radio/:id', (req, res) => {
