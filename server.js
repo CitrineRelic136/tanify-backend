@@ -26,7 +26,7 @@ app.get('/stream/:id', async (req, res) => {
     });
 
     const options = {
-        hostname: 'cobalt.kwiatekmilosz.pl', // veya alternatif açık bir instance
+        hostname: 'https://api.cobalt.tools/', // veya alternatif açık bir instance
         port: 443,
         path: '/',
         method: 'POST',
