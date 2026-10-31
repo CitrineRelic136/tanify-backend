@@ -2,6 +2,7 @@ const express = require('express');
 const { spawn } = require('child_process');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 
 // Proje içindeki yerel bin klasörünü PATH'e ekle (Render uyumu için)
 process.env.PATH = `${path.join(__dirname, 'bin')}:${process.env.PATH}`;
@@ -27,8 +28,17 @@ app.get('/stream/:id', (req, res) => {
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     console.log(`İstek alındı, işleniyor: ${videoUrl}`);
 
-    // yt-dlp -g komutu
-    const ytdlp = spawn('yt-dlp', ['-g', '-f', 'bestaudio/best', videoUrl]);
+    // yt-dlp argümanları (cookies.txt varsa otomatik eklenir)
+    const args = [];
+    const cookiesPath = path.join(__dirname, 'cookies.txt');
+    if (fs.existsSync(cookiesPath)) {
+        args.push('--cookies', cookiesPath);
+    }
+
+    args.push('-g', '-f', 'bestaudio/best', videoUrl);
+
+    // yt-dlp komutu
+    const ytdlp = spawn('yt-dlp', args);
 
     let output = '';
     let errorOutput = '';
@@ -74,7 +84,16 @@ app.get('/radio/:id', (req, res) => {
     }
 
     const mixPlaylistUrl = `https://www.youtube.com/playlist?list=RD${videoId}`;
-    const ytdlp = spawn('yt-dlp', ['--flat-playlist', '--dump-json', '--playlist-end', '15', mixPlaylistUrl]);
+    
+    const args = [];
+    const cookiesPath = path.join(__dirname, 'cookies.txt');
+    if (fs.existsSync(cookiesPath)) {
+        args.push('--cookies', cookiesPath);
+    }
+
+    args.push('--flat-playlist', '--dump-json', '--playlist-end', '15', mixPlaylistUrl);
+
+    const ytdlp = spawn('yt-dlp', args);
 
     let output = '';
     let errorOutput = '';
