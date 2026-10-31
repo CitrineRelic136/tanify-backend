@@ -16,34 +16,37 @@ const cookieArg = hasCookies ? `--cookies "${cookiesPath}"` : '';
 const streamCache = new Map();
 
 // Sunucu tarafında proxy akış desteği (/server.js)
+// 1. Ses URL Çözücü (JSON Yanıt Döndüren Sağlam Versiyon)
 app.get('/stream/:id', (req, res) => {
     const videoId = req.params.id;
 
     if (streamCache.has(videoId)) {
-        console.log(`⚡ Önbellekten Proxy Akışı: ${videoId}`);
-        return proxyAudio(streamCache.get(videoId), res);
+        console.log(`⚡ Önbellekten Anında Verildi: ${videoId}`);
+        return res.json({ url: streamCache.get(videoId) });
     }
 
-    console.log(`🔍 Çözümleniyor ve Proxy Hazırlanıyor: ${videoId}`);
-    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node --no-warnings --no-playlist -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
+    console.log(`🔍 Çözümleniyor: ${videoId}`);
+    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
-            console.error(`❌ yt-dlp Hatası: ${error.message}`);
+            console.error(`❌ yt-dlp Çalıştırma Hatası: ${error.message}`);
             return res.status(500).json({ error: error.message });
         }
 
         const streamUrl = stdout.trim().split('\n')[0];
         if (streamUrl && streamUrl.startsWith('http')) {
             streamCache.set(videoId, streamUrl);
-            return proxyAudio(streamUrl, res);
+            console.log(`✅ Başarılı URL Alındı ve Önbelleklendi!`);
+            res.json({ url: streamUrl });
         } else {
+            console.log(`❌ Geçersiz URL çıktı:`, stdout);
             res.status(500).json({ error: 'Geçerli link alınamadı' });
         }
     });
 });
 
-ss
+
 // 2. Benzer Radyo Şarkıları Endpoint'i
 app.get('/radio/:id', (req, res) => {
     const videoId = req.params.id;
