@@ -25,8 +25,7 @@ app.get('/stream/:id', (req, res) => {
     }
 
     console.log(`🔍 Çözümleniyor ve Proxy Hazırlanıyor: ${videoId}`);
-    // --js-runtimes node kaldırıldı, saf ve kararlı komut bırakıldı
-    const command = `${ytDlpPath} ${cookieArg} --no-warnings --no-playlist --no-check-certificates -g "https://www.youtube.com/watch?v=${videoId}"`;
+    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node --no-warnings --no-playlist -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
@@ -44,28 +43,13 @@ app.get('/stream/:id', (req, res) => {
     });
 });
 
-function proxyAudio(targetUrl, clientRes) {
-    const https = require('https');
-    https.get(targetUrl, (ytRes) => {
-        clientRes.writeHead(ytRes.statusCode, {
-            'Content-Type': ytRes.headers['content-type'] || 'audio/webm',
-            'Transfer-Encoding': 'chunked'
-        });
-        ytRes.pipe(clientRes);
-    }).on('error', (err) => {
-        console.error(`❌ Proxy Akış Hatası: ${err.message}`);
-        if (!clientRes.headersSent) {
-            clientRes.status(500).json({ error: 'Akış aktarılamadı' });
-        }
-    });
-}
-
+ss
 // 2. Benzer Radyo Şarkıları Endpoint'i
 app.get('/radio/:id', (req, res) => {
     const videoId = req.params.id;
     console.log(`📻 Benzer Radyo Şarkıları İsteniyor: ${videoId}`);
 
-    const command = `${ytDlpPath} ${cookieArg} --no-warnings --no-playlist --no-check-certificates -g "https://www.youtube.com/watch?v=${videoId}"`;
+    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node --flat-playlist --print "%(id)s||%(title)s||%(uploader)s" "https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
