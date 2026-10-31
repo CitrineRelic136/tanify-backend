@@ -31,12 +31,14 @@ app.get('/stream/:id', (req, res) => {
 
     const args = [];
     const cookiesPath = path.join(__dirname, 'cookies.txt');
+    
+    // Eğer cookies.txt varsa sadece onu ekliyoruz (Android client parametresini sildik)
     if (fs.existsSync(cookiesPath)) {
         args.push('--cookies', cookiesPath);
     }
 
-    // KRİTİK DEĞİŞİKLİK: player_client=android ekleyerek 403 ve imza hatalarını bypass ediyoruz
-    args.push('--extractor-args', 'youtube:player_client=android', '-g', '-f', 'bestaudio/best', videoUrl);
+    // Doğrudan cookies ile en iyi sesi alacak şekilde yapılandırıyoruz
+    args.push('-g', '-f', 'bestaudio/best', videoUrl);
 
     const ytdlp = spawn('yt-dlp', args);
 
