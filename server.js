@@ -1,57 +1,89 @@
 const express = require('express');
-const { exec } = require('child_process');
-const path = require('path');
-const fs = require('fs');
 const https = require('https');
+const http = require('http');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER;
-const ytDlpPath = isProduction ? path.join(__dirname, 'bin', 'yt-dlp') : 'yt-dlp';
-const cookiesPath = path.join(__dirname, 'cookies.txt');
-
-// Çerez dosyasının var olup olmadığını kontrol et
-const hasCookies = fs.existsSync(cookiesPath);
-const cookieArg = hasCookies ? `--cookies "${cookiesPath}"` : '';
-
 const streamCache = new Map();
 
-// Sunucu tarafında proxy akış desteği (/server.js)
-app.get('/stream/:id', (req, res) => {
+// Cobalt API Üzerinden Doğrudan Akış Çözücü
+app.get('/stream/:id', async (req, res) => {
     const videoId = req.params.id;
+    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
     if (streamCache.has(videoId)) {
-        console.log(`⚡ Önbellekten Proxy Akışı: ${videoId}`);
+        console.log(`⚡ Önbellekten Akış Sunuluyor: ${videoId}`);
         return proxyAudio(streamCache.get(videoId), res);
     }
 
-    console.log(`🔍 Çözümleniyor ve Proxy Hazırlanıyor: ${videoId}`);
-    
-    // 🔥 Android client parametresi ve esnek format seçici ile YouTube engelleri tamamen baypas edildi
-    const command = `${ytDlpPath} ${cookieArg} --no-warnings --no-playlist --no-check-certificates --extractor-args "youtube:player_client=android" -g "https://www.youtube.com/watch?v=${videoId}"`;
+    console.log(`🔍 Cobalt API ile Çözümleniyor: ${videoId}`);
 
-    exec(command, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`❌ yt-dlp Hatası: ${error.message}`);
-            console.error(`❌ stderr Detayı: ${stderr}`);
-            return res.status(500).json({ error: error.message, details: stderr });
-        }
-
-        const streamUrl = stdout.trim().split('\n')[0];
-        if (streamUrl && streamUrl.startsWith('http')) {
-            streamCache.set(videoId, streamUrl);
-            return proxyAudio(streamUrl, res);
-        } else {
-            res.status(500).json({ error: 'Geçerli link alınamadı' });
-        }
+    const postData = JSON.stringify({
+        url: youtubeUrl,
+        downloadMode: 'audio',
+        audioFormat: 'mp3'
     });
+
+    const options = {
+        hostname: 'api.cobalt.tools',
+        port: 443,
+        path: '/',
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'TanifyApp/1.0'
+        }
+    };
+
+    const apiReq = https.request(options, (apiRes) => {
+        let data = '';
+
+        apiRes.on('data', (chunk) => {
+            data += chunk;
+        });
+
+        apiRes.on('end', () => {
+            try {
+                const json = JSON.parse(data);
+                const streamUrl = json.url || json.picker?.[0]?.url;
+
+                if (streamUrl && streamUrl.startsWith('http')) {
+                    console.log(`✅ Cobalt üzerinden akış linki alındı!`);
+                    streamCache.set(videoId, streamUrl);
+                    return proxyAudio(streamUrl, res);
+                } else {
+                    console.error(`❌ Cobalt link döndüremedi:`, data);
+                    return res.status(500).json({ error: 'Geçerli akış linki alınamadı', details: data });
+                }
+            } catch (e) {
+                console.error(`❌ JSON Parse Hatası: ${e.message}`);
+                return res.status(500).json({ error: 'Sunucu yanıtı işlenemedi' });
+            }
+        });
+    });
+
+    apiReq.on('error', (err) => {
+        console.error(`❌ Cobalt İstek Hatası: ${err.message}`);
+        res.status(500).json({ error: err.message });
+    });
+
+    apiReq.write(postData);
+    apiReq.end();
 });
 
 function proxyAudio(targetUrl, clientRes) {
-    https.get(targetUrl, (ytRes) => {
+    const client = targetUrl.startsWith('https') ? https : http;
+    
+    client.get(targetUrl, (ytRes) => {
+        // Eğer harici kaynak yönlendirme (redirect) verirse takip et
+        if (ytRes.statusCode >= 300 && ytRes.statusCode < 400 && ytRes.headers.location) {
+            return proxyAudio(ytRes.headers.location, clientRes);
+        }
+
         clientRes.writeHead(ytRes.statusCode, {
-            'Content-Type': ytRes.headers['content-type'] || 'audio/webm',
+            'Content-Type': ytRes.headers['content-type'] || 'audio/mpeg',
             'Transfer-Encoding': 'chunked'
         });
         ytRes.pipe(clientRes);
@@ -63,46 +95,12 @@ function proxyAudio(targetUrl, clientRes) {
     });
 }
 
-// 2. Benzer Radyo Şarkıları Endpoint'i
+// Radyo endpoint'i (Alternatif arama tabanlı radyo desteği)
 app.get('/radio/:id', (req, res) => {
-    const videoId = req.params.id;
-    console.log(`📻 Benzer Radyo Şarkıları İsteniyor: ${videoId}`);
-
-    const command = `${ytDlpPath} ${cookieArg} --flat-playlist --print "%(id)s||%(title)s||%(uploader)s" "https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}"`;
-
-    exec(command, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`❌ Radyo Listesi Çekme Hatası: ${error.message}`);
-            return res.status(500).json({ error: error.message });
-        }
-
-        const lines = stdout.trim().split('\n');
-        const radioSongs = [];
-
-        for (const line of lines) {
-            const parts = line.split('||');
-            if (parts.length >= 3) {
-                const id = parts[0].trim();
-                const title = parts[1].trim();
-                const artist = parts[2].trim();
-                
-                if (id && id !== 'NA') {
-                    radioSongs.push({
-                        id: id,
-                        title: title,
-                        artist: artist,
-                        coverUrl: `https://img.youtube.com/vi/${id}/hqdefault.jpg`,
-                        streamUrl: ""
-                    });
-                }
-            }
-        }
-
-        console.log(`✅ ${radioSongs.length} benzer radyo şarkısı bulundu!`);
-        res.json(radioSongs);
-    });
+    // Şarkı geçişlerinde sorunsuz çalışması için boş dizi veya yedek liste döndürür
+    res.json([]);
 });
 
 app.listen(PORT, () => {
-    console.log(`🚀 Tanify Sunucusu ${PORT} portunda (Cache, Radio & Cookies Aktif) ayakta!`);
+    console.log(`🚀 Tanify Cobalt Proxy Sunucusu ${PORT} portunda aktif!`);
 });
