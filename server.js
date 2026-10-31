@@ -15,18 +15,19 @@ const cookieArg = hasCookies ? `--cookies "${cookiesPath}"` : '';
 
 const streamCache = new Map();
 
-// Sunucu tarafında proxy akış desteği (/server.js)
-// 1. Ses URL Çözücü (JSON Yanıt Döndüren Sağlam Versiyon)
+const https = https = require('https'); // Dosyanın en başına ekle (yoksa)
+
+// 1. Ses Akışını Sunucu Üzerinden Proxy'leme (Kesin Çözüm)
 app.get('/stream/:id', (req, res) => {
     const videoId = req.params.id;
 
     if (streamCache.has(videoId)) {
-        console.log(`⚡ Önbellekten Anında Verildi: ${videoId}`);
-        return res.json({ url: streamCache.get(videoId) });
+        console.log(`⚡ Önbellekten Proxy Akışı Başlatılıyor: ${videoId}`);
+        return proxyAudio(streamCache.get(videoId), res);
     }
 
-    console.log(`🔍 Çözümleniyor: ${videoId}`);
-    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
+    console.log(`🔍 Çözümleniyor ve Proxy Hazırlanıyor: ${videoId}`);
+    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node --no-warnings --no-playlist -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
@@ -37,14 +38,30 @@ app.get('/stream/:id', (req, res) => {
         const streamUrl = stdout.trim().split('\n')[0];
         if (streamUrl && streamUrl.startsWith('http')) {
             streamCache.set(videoId, streamUrl);
-            console.log(`✅ Başarılı URL Alındı ve Önbelleklendi!`);
-            res.json({ url: streamUrl });
+            console.log(`✅ URL Alındı, Proxy Üzerinden Aktarılıyor!`);
+            return proxyAudio(streamUrl, res);
         } else {
             console.log(`❌ Geçersiz URL çıktı:`, stdout);
             res.status(500).json({ error: 'Geçerli link alınamadı' });
         }
     });
 });
+
+// Yardımcı Proxy Fonksiyonu (Sesi YouTube'dan alıp telefona basar)
+function proxyAudio(targetUrl, clientRes) {
+    https.get(targetUrl, (ytRes) => {
+        clientRes.writeHead(ytRes.statusCode, {
+            'Content-Type': ytRes.headers['content-type'] || 'audio/webm',
+            'Transfer-Encoding': 'chunked'
+        });
+        ytRes.pipe(clientRes);
+    }).on('error', (err) => {
+        console.error(`❌ Proxy Akış Hatası: ${err.message}`);
+        if (!clientRes.headersSent) {
+            clientRes.status(500).json({ error: 'Akış aktarılamadı' });
+        }
+    });
+}
 
 
 // 2. Benzer Radyo Şarkıları Endpoint'i
