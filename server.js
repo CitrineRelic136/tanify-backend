@@ -25,7 +25,8 @@ app.get('/stream/:id', (req, res) => {
     }
 
     console.log(`🔍 Çözümleniyor ve Proxy Hazırlanıyor: ${videoId}`);
-    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node --no-warnings --no-playlist -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
+    // Android player client parametresi ile hızlandırıldı
+    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node --no-warnings --no-playlist --extractor-args "youtube:player_client=android" -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
