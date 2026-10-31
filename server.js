@@ -25,8 +25,8 @@ app.get('/stream/:id', (req, res) => {
     }
 
     console.log(`🔍 Çözümleniyor ve Proxy Hazırlanıyor: ${videoId}`);
-    // Hatalı argüman temizlendi, en kararlı saf format komutu kullanılıyor
-    const command = `${ytDlpPath} ${cookieArg} --js-runtimes node --no-warnings --no-playlist -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
+    // --js-runtimes node kaldırıldı, saf ve kararlı komut bırakıldı
+    const command = `${ytDlpPath} ${cookieArg} --no-warnings --no-playlist -g -f bestaudio "https://www.youtube.com/watch?v=${videoId}"`;
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
