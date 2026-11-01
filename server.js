@@ -35,12 +35,11 @@ app.get('/stream/:id', (req, res) => {
         args.push('--cookies', cookiesPath);
     }
 
-    // KISIR DÖNGÜYÜ KIRAN NOKTA: 
-    // player_client=tvembedded veya ios kullanarak web imza/JS challenge engellerini tamamen bypass ediyoruz.
+    // Doğrudan cookies desteği ile mweb client kullanarak engelleri aşıyoruz
     args.push(
-        '--extractor-args', 'youtube:player_client=tvembedded',
+        '--extractor-args', 'youtube:player_client=mweb',
         '-g',
-        '-f', 'ba[ext=m4a]/bestaudio/best',
+        '-f', 'bestaudio/best',
         videoUrl
     );
 
