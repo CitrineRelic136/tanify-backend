@@ -35,10 +35,9 @@ app.get('/stream/:id', (req, res) => {
         args.push('--cookies', cookiesPath);
     }
 
-    // KESİN ÇÖZÜM: player_client=ios ve ek user-agent ile IP bloklarını ve imza doğrulamalarını by-pass ediyoruz
+    // Yerelde çalışan kararlı argümanlar
     args.push(
-        '--extractor-args', 'youtube:player_client=ios',
-        '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+        '--remote-components', 'ejs:github',
         '-g',
         '-f', 'bestaudio/best',
         videoUrl
