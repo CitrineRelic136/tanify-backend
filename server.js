@@ -35,9 +35,10 @@ app.get('/stream/:id', (req, res) => {
         args.push('--cookies', cookiesPath);
     }
 
-    // Doğrudan cookies desteği ile mweb client kullanarak engelleri aşıyoruz
+    // KESİN ÇÖZÜM: player_client=ios ve ek user-agent ile IP bloklarını ve imza doğrulamalarını by-pass ediyoruz
     args.push(
-        '--extractor-args', 'youtube:player_client=mweb',
+        '--extractor-args', 'youtube:player_client=ios',
+        '--user-agent', 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
         '-g',
         '-f', 'bestaudio/best',
         videoUrl
